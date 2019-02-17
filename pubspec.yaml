@@ -1,0 +1,19 @@
+name: timer_builder
+description: A widget that rebuilds itself on Timer events
+author: Alexander Ryzhov <aryzhov07@gmail.com>
+homepage: https://github.com/aryzhov/flutter_timer
+
+environment:
+  sdk: ">=2.1.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+
+  uses-material-design: true
