@@ -1,0 +1,22 @@
+name: example
+author: Alexander Ryzhov <aryzhov07@gmail.com>
+homepage: https://github.com/aryzhov/flutter-timer-builder
+version: 1.0.0+2
+
+environment:
+  sdk: ">=2.1.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  timer_builder:
+    path: ../
+
+flutter:
+
+  uses-material-design: true

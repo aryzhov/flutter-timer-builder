@@ -40,101 +40,96 @@ DateTime alignDateTime(DateTime dt, Duration duration, [bool roundUp = false]) {
 }
 
 class _TimerBuilderState extends State<TimerBuilder> {
-  DateTime _currentTime;
-  final _timers = Map<DateTime, Timer>();
-  Duration _period;
-  DateTime _nextPeriodic;
-  bool _align;
-  bool _disposed = false;
+
+  Stream<DateTime> stream;
+  Completer completer;
 
   @override
   Widget build(BuildContext context) {
-    return widget.builder(context);
+    return StreamBuilder(
+      stream: stream,
+      builder: (context, _) => widget.builder(context),
+    );
   }
 
   @override
   void didUpdateWidget(TimerBuilder oldWidget) {
-    _update(widget.specific, widget.periodic, widget.align);
+    super.didUpdateWidget(oldWidget);
+    _update();
   }
 
   @override
   void initState() {
     super.initState();
-    _update(widget.specific, widget.periodic, widget.align);
+    _update();
   }
 
   @override
   void dispose() {
     super.dispose();
-    _cancelAll();
-    _disposed = false;
+    _cancel();
   }
 
-  DateTime _getNextPeriodic(DateTime now) {
-    if (_period == null) return null;
-    return alignDateTime(now.add(_period), _align ? _period : Duration.zero);
+  _update() {
+    _cancel();
+    completer = Completer();
+    stream = timerStream(specific: widget.specific, period: widget.periodic,
+        align: widget.align ? widget.periodic : null, stopWhen: completer.future);
   }
 
-  _update(Iterable<DateTime> triggers, Duration period, bool align) {
-    if (_disposed) return;
-    var now = _currentTime ?? DateTime.now();
-    if (_period != period || _align != align) {
-      this._period = period;
-      this._align = align;
-      if (this._period != null) {
-        _nextPeriodic = _getNextPeriodic(now);
-        _addTimer(_nextPeriodic, true);
+  _cancel() {
+    if(completer != null)
+      completer.complete();
+  }
+}
+
+Stream<DateTime> timerStream({
+  List<DateTime> specific = const [],
+  Duration period,
+  Duration align,
+  Future stopWhen,
+}) async* {
+  assert(period == null || period >= Duration.zero);
+  final sortedSpecific = List.from(specific.where((e) => e != null).toList());
+  sortedSpecific.sort((a, b) => -a.compareTo(b));
+
+  var now = DateTime.now();
+  var nextPeriodic = period == null ? null: alignDateTime(now.add(period), align);
+
+  while(true) {
+    DateTime nextSpecific;
+    while(sortedSpecific.isNotEmpty && nextSpecific == null) {
+      var next = sortedSpecific.removeLast();
+      if(now.compareTo(next) <= 0)
+        nextSpecific = next;
+    }
+
+    final nextStop = nextSpecific != null ?
+      nextPeriodic != null ? nextSpecific.compareTo(nextPeriodic) < 0 ?
+          nextSpecific: nextPeriodic: nextSpecific: nextPeriodic;
+    if(nextStop == null)
+      return;
+    Duration waitTime = nextStop.difference(now);
+    if(waitTime > Duration.zero) {
+      if (stopWhen != null) {
+        try {
+          await stopWhen.timeout(waitTime);
+          return;
+        } catch (ex) {
+          if (!(ex is TimeoutException))
+            throw ex;
+        }
       } else {
-        _nextPeriodic = null;
+        await Future.delayed(waitTime);
       }
     }
-    for (var d in _timers.keys.toList()) if (!triggers.contains(d) && d != _nextPeriodic) _removeTimer(d);
-    for (var t in triggers) _addTimer(t);
-  }
-
-  _addTimer(DateTime trigger, [bool force = false]) {
-    if (trigger == null) return;
-    final now = DateTime.now();
-//    print("addTimer: $trigger");
-    var difference = trigger.difference(now);
-    if (difference <= Duration.zero) {
-      if (force)
-        difference = Duration.zero;
-      else
-        return;
+    yield nextStop;
+    now = DateTime.now();
+    if(nextPeriodic != null && now.compareTo(nextPeriodic) > 0) {
+      nextPeriodic = alignDateTime(nextPeriodic.add(period), align);
+      if(now.compareTo(nextPeriodic) < 0) {
+        nextPeriodic = alignDateTime(now.add(period), align);
+      }
     }
-    _timers.putIfAbsent(
-        trigger,
-        () => Timer(difference, () {
-              _currentTime = DateTime.now();
-//      print("Timer: $_currentTime");
-              bool found = false;
-              // In case the device was suspended, cancel all other timers which are past due
-              for (var t in _timers.keys.toList()) {
-                if (t == trigger || t.compareTo(_currentTime) <= 0) {
-                  _removeTimer(t);
-                  found = true;
-                }
-              }
-              if (_nextPeriodic != null && _nextPeriodic.compareTo(_currentTime) <= 0) {
-                _nextPeriodic = _getNextPeriodic(_currentTime);
-                _addTimer(_nextPeriodic, true);
-                found = true;
-              }
-              try {
-                if (found && !_disposed) setState(() {});
-              } finally {
-                _currentTime = null;
-              }
-            }));
-  }
-
-  _removeTimer(DateTime trigger) {
-//    print("removeTimer: $trigger");
-    if (trigger != null) _timers.remove(trigger)?.cancel();
-  }
-
-  _cancelAll() {
-    if (_timers.isNotEmpty) _update([], null, false);
   }
 }
