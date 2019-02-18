@@ -1,1 +1,1 @@
-example/lib/example.dart
+lib/example.dart

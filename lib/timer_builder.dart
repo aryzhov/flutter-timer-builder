@@ -1,42 +1,98 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 
+/// Used by TimerBuilder to determine the next DateTime to trigger a rebuild on
+typedef DateTime TimerGenerator(DateTime now);
+
 /// A widget that rebuilds on specific and / or periodic Timer events.
 class TimerBuilder extends StatefulWidget {
   final WidgetBuilder builder;
-  final List<DateTime> specific;
-  final Duration periodic;
-  final bool align;
+  final TimerGenerator generator;
 
+  /// Use this constructor only if you need to provide a custom TimerGenerator.
+  /// For general cases, prefer to use [TimerBuilder.periodic] and [TimerBuilder..scheduled]
+  /// This constructor accepts a custom generator function that returns the next time event
+  /// to rebuild on.
   TimerBuilder({
-    /// Specific time events. If a time event occurs in the past, it will be ignored.
-    this.specific = const [],
-    /// Specifies a duration for a periodic refresh.
-    this.periodic,
-    /// If true and [periodic] is specified, the periodic time events will be aligned
-    /// using the [alignDateTime] function.
-    this.align = true,
+    /// Returns the next time event. If the returned time is in the past, it will be ignored and
+    /// the generator will be called again to retrieve the next time event.
+    /// If the generator returns [null], it indicates the end of time event sequence.
+    @required
+    this.generator,
     /// Builds the widget. Called for every time event or when the widget needs to be built/rebuilt.
-    @required this.builder,
+    @required
+    this.builder,
   });
 
   @override
   State<StatefulWidget> createState() {
     return _TimerBuilderState();
   }
-}
 
-/// Rounds down or up a [DateTime] object using a [Duration] object.
-/// If [roundUp] is true, the result is rounded up, otherwise it's rounded down.
-DateTime alignDateTime(DateTime dt, Duration duration, [bool roundUp = false]) {
-  final micros = dt.microsecondsSinceEpoch;
-  final durationMicros = duration.inMicroseconds.abs();
-  if (durationMicros == 0) return dt;
-  final correction = micros % durationMicros;
-  if (correction == 0) return dt;
-  final correctedResultMicros = micros - correction + (roundUp ? durationMicros : 0);
-  final result = DateTime.fromMicrosecondsSinceEpoch(correctedResultMicros);
-  return result;
+  /// Rebuilds periodically
+  TimerBuilder.periodic(Duration period, {
+    /// If true then the events will be aligned
+    bool align = true,
+    /// Builds the widget. Called for every time event or when the widget needs to be built/rebuilt.
+    @required
+    this.builder,
+  }): this.generator = periodicTimer(period, align: align ? period: Duration.zero);
+
+  /// Rebuilds on a schedule
+  TimerBuilder.scheduled(Iterable<DateTime> schedule, {
+    bool align = true,
+    /// Builds the widget. Called for every time event or when the widget needs to be built/rebuilt.
+    @required
+    this.builder,
+  }): this.generator = scheduledTimer(schedule);
+
+  static TimerGenerator periodicTimer(Duration period, {Duration align = Duration.zero}) {
+    assert(period > Duration.zero);
+
+    DateTime next;
+    return (DateTime now) {
+      next = alignDateTime((next ?? now).add(period), align);
+      if(now.compareTo(next) < 0) {
+        next = alignDateTime(now.add(period), align);
+      }
+      return next;
+    };
+
+  }
+
+  static TimerGenerator scheduledTimer(Iterable<DateTime> schedule) {
+
+    List<DateTime> sortedSpecific = List.from(schedule.where((e) => e != null).toList());
+    sortedSpecific.sort((a, b) => a.compareTo(b));
+
+    return fromIterable(sortedSpecific);
+
+  }
+
+  static TimerGenerator fromIterable(Iterable<DateTime> iterable) {
+
+    final iterator = iterable.iterator;
+    return (DateTime now) {
+      return  iterator.moveNext() ? iterator.current : null;
+    };
+
+  }
+
+  /// Rounds down or up a [DateTime] object using a [Duration] object.
+  /// If [roundUp] is true, the result is rounded up, otherwise it's rounded down.
+  static DateTime alignDateTime(DateTime dt, Duration duration, [bool roundUp = false]) {
+    if(duration == Duration.zero)
+      return dt;
+    final micros = dt.microsecondsSinceEpoch;
+    final durationMicros = duration.inMicroseconds.abs();
+    if (durationMicros == 0) return dt;
+    final correction = micros % durationMicros;
+    if (correction == 0) return dt;
+    final correctedResultMicros = micros - correction + (roundUp ? durationMicros : 0);
+    final result = DateTime.fromMicrosecondsSinceEpoch(correctedResultMicros);
+    return result;
+  }
+
 }
 
 class _TimerBuilderState extends State<TimerBuilder> {
@@ -73,63 +129,34 @@ class _TimerBuilderState extends State<TimerBuilder> {
   _update() {
     _cancel();
     completer = Completer();
-    stream = timerStream(specific: widget.specific, period: widget.periodic,
-        align: widget.align ? widget.periodic : null, stopWhen: completer.future);
+    stream = _timerStream(widget.generator, completer.future);
   }
 
   _cancel() {
     if(completer != null)
       completer.complete();
   }
-}
 
-Stream<DateTime> timerStream({
-  List<DateTime> specific = const [],
-  Duration period,
-  Duration align,
-  Future stopWhen,
-}) async* {
-  assert(period == null || period >= Duration.zero);
-  final sortedSpecific = List.from(specific.where((e) => e != null).toList());
-  sortedSpecific.sort((a, b) => -a.compareTo(b));
-
-  var now = DateTime.now();
-  var nextPeriodic = period == null ? null: alignDateTime(now.add(period), align);
-
-  while(true) {
-    DateTime nextSpecific;
-    while(sortedSpecific.isNotEmpty && nextSpecific == null) {
-      var next = sortedSpecific.removeLast();
-      if(now.compareTo(next) <= 0)
-        nextSpecific = next;
-    }
-
-    final nextStop = nextSpecific != null ?
-      nextPeriodic != null ? nextSpecific.compareTo(nextPeriodic) < 0 ?
-          nextSpecific: nextPeriodic: nextSpecific: nextPeriodic;
-    if(nextStop == null)
-      return;
-    Duration waitTime = nextStop.difference(now);
-    if(waitTime > Duration.zero) {
-      if (stopWhen != null) {
-        try {
-          await stopWhen.timeout(waitTime);
-          return;
-        } catch (ex) {
-          if (!(ex is TimeoutException))
-            throw ex;
-        }
-      } else {
-        await Future.delayed(waitTime);
+  static Stream<DateTime> _timerStream(
+    TimerGenerator generator,
+    Future stopWhen,
+  ) async* {
+    var now = DateTime.now();
+    DateTime next;
+    while((next = generator(now)) != null) {
+      if(now.compareTo(next) > 0)
+        continue;
+      Duration waitTime = next.difference(now);
+      try {
+        await stopWhen.timeout(waitTime);
+        return;
+      } catch (ex) {
+        if (!(ex is TimeoutException))
+          throw ex;
       }
-    }
-    yield nextStop;
-    now = DateTime.now();
-    if(nextPeriodic != null && now.compareTo(nextPeriodic) > 0) {
-      nextPeriodic = alignDateTime(nextPeriodic.add(period), align);
-      if(now.compareTo(nextPeriodic) < 0) {
-        nextPeriodic = alignDateTime(now.add(period), align);
-      }
+      yield next;
+      now = DateTime.now();
     }
   }
+
 }

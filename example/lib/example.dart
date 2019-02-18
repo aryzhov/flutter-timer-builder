@@ -5,7 +5,24 @@ void main() {
   runApp(SampleApp());
 }
 
-class SampleApp extends StatelessWidget {
+class SampleApp extends StatefulWidget {
+
+  @override
+  State<StatefulWidget> createState() {
+    return SampleAppState();
+  }
+
+}
+
+class SampleAppState extends State<SampleApp> {
+
+  DateTime alert;
+
+  @override
+  void initState() {
+    super.initState();
+    alert = DateTime.now().add(Duration(seconds: 10));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,26 +32,63 @@ class SampleApp extends StatelessWidget {
         appBar: AppBar(
           title: Text('Sample App'),
         ),
-        body: Center(
-          child: ClockWidget(),
+        body:
+
+        TimerBuilder.scheduled([alert],
+          builder: (context) {
+            // This function will be called once the alert time is reached
+            var now = DateTime.now();
+            var reached = now.compareTo(alert) >= 0;
+            final textStyle = Theme.of(context).textTheme.title;
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  Icon(
+                    reached ? Icons.alarm_on: Icons.alarm,
+                    color: reached ? Colors.red: Colors.green,
+                    size: 48,
+                  ),
+                  !reached ?
+                    TimerBuilder.periodic(
+                        Duration(seconds: 1),
+                        align: false,
+                        builder: (context) {
+                          // This function will be called every second until the alert time
+                          var now = DateTime.now();
+                          var remaining = alert.difference(now);
+                          return Text(formatDuration(remaining), style: textStyle,);
+                        }
+                    )
+                    :
+                    Text("Alert", style: textStyle),
+                  RaisedButton(
+                    child: Text("Reset"),
+                    onPressed: () {
+                      setState(() {
+                        alert = DateTime.now().add(Duration(seconds: 10));
+                      });
+                    },
+                  ),
+                ],
+              ),
+            );
+          }
         ),
+      ),
+      theme: ThemeData(
+        backgroundColor: Colors.white
       ),
     );
   }
 }
 
-class ClockWidget extends StatelessWidget {
-
-  @override
-  Widget build(BuildContext context) {
-    return TimerBuilder(
-      specific: List.generate(10, (i) => alignDateTime(DateTime.now().add(Duration(seconds: i*2)), Duration(seconds: 1))),
-      periodic: Duration(seconds: 3),
-      align: true,
-      builder: (context) {
-        return Text("${DateTime.now()}");
-      }
-    );
+String formatDuration(Duration d) {
+  String f(int n) {
+    return n.toString().padLeft(2, '0');
   }
 
+  return "${f(d.inMinutes)}:${f(d.inSeconds%60)}";
 }
+
