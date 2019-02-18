@@ -30,13 +30,14 @@ class TimerBuilder extends StatefulWidget {
   }
 
   /// Rebuilds periodically
-  TimerBuilder.periodic(Duration period, {
-    /// If true then the events will be aligned
-    bool align = true,
+  TimerBuilder.periodic(Duration interval, {
+    /// Specifies the alignment unit for the generated time events. Specify Duration.zero
+    /// if you want no alignment. By default, the alignment unit is computed from the interval.
+    Duration alignment,
     /// Builds the widget. Called for every time event or when the widget needs to be built/rebuilt.
     @required
     this.builder,
-  }): this.generator = periodicTimer(period, align: align ? period: Duration.zero);
+  }): this.generator = periodicTimer(interval, alignment: alignment ?? getAlignmentUnit(interval));
 
   /// Rebuilds on a schedule
   TimerBuilder.scheduled(Iterable<DateTime> schedule, {
@@ -46,14 +47,14 @@ class TimerBuilder extends StatefulWidget {
     this.builder,
   }): this.generator = scheduledTimer(schedule);
 
-  static TimerGenerator periodicTimer(Duration period, {Duration align = Duration.zero}) {
-    assert(period > Duration.zero);
+  static TimerGenerator periodicTimer(Duration interval, {Duration alignment = Duration.zero}) {
+    assert(interval > Duration.zero);
 
     DateTime next;
     return (DateTime now) {
-      next = alignDateTime((next ?? now).add(period), align);
+      next = alignDateTime((next ?? now).add(interval), alignment);
       if(now.compareTo(next) < 0) {
-        next = alignDateTime(now.add(period), align);
+        next = alignDateTime(now.add(interval), alignment);
       }
       return next;
     };
@@ -78,18 +79,40 @@ class TimerBuilder extends StatefulWidget {
 
   }
 
+  /// Returns an alignment unit can be passed to [alignDateTime] in order to align
+  /// the date/time units. For example, if the specified interval is 15 minutes,
+  /// the alignment unit is 1 minute.
+  static Duration getAlignmentUnit(Duration interval) {
+    return Duration(
+      days: interval.inDays > 0 ? 1: 0,
+      hours: interval.inDays == 0 && interval.inHours > 0 ? 1: 0,
+      minutes: interval.inHours == 0 && interval.inMinutes > 0 ? 1: 0,
+      seconds: interval.inMinutes == 0 && interval.inSeconds > 0 ? 1: 0,
+      milliseconds: interval.inSeconds == 0 && interval.inMilliseconds > 0 ? 1: 0,
+      microseconds: interval.inMilliseconds == 0 && interval.inMicroseconds > 0 ? 1: 0,
+    );
+  }
+
   /// Rounds down or up a [DateTime] object using a [Duration] object.
   /// If [roundUp] is true, the result is rounded up, otherwise it's rounded down.
-  static DateTime alignDateTime(DateTime dt, Duration duration, [bool roundUp = false]) {
-    if(duration == Duration.zero)
+  /// If the duration is a multiple of days, the result will be aligned at
+  /// the day mark in the timezone of the source datetime.
+  static DateTime alignDateTime(DateTime dt, Duration alignment, [bool roundUp = false]) {
+    assert(alignment >= Duration.zero);
+    if(alignment == Duration.zero)
       return dt;
-    final micros = dt.microsecondsSinceEpoch;
-    final durationMicros = duration.inMicroseconds.abs();
-    if (durationMicros == 0) return dt;
-    final correction = micros % durationMicros;
-    if (correction == 0) return dt;
-    final correctedResultMicros = micros - correction + (roundUp ? durationMicros : 0);
-    final result = DateTime.fromMicrosecondsSinceEpoch(correctedResultMicros);
+    final correction = Duration(
+      days: 0,
+      hours: alignment.inDays > 0 ? dt.hour: alignment.inHours > 0 ? dt.hour % alignment.inHours: 0,
+      minutes: alignment.inHours > 0 ? dt.minute: alignment.inMinutes > 0 ? dt.minute % alignment.inMinutes: 0,
+      seconds: alignment.inMinutes > 0 ? dt.second: alignment.inSeconds > 0 ? dt.second % alignment.inSeconds: 0,
+      milliseconds: alignment.inSeconds > 0 ? dt.millisecond: alignment.inMilliseconds > 0 ? dt.millisecond % alignment.inMilliseconds: 0,
+      microseconds: alignment.inMilliseconds > 0 ? dt.microsecond: 0
+    );
+    if(correction == Duration.zero)
+      return dt;
+    final corrected = dt.subtract(correction);
+    final result = roundUp ? corrected.add(alignment): corrected;
     return result;
   }
 
@@ -139,7 +162,7 @@ class _TimerBuilderState extends State<TimerBuilder> {
 
   static Stream<DateTime> _timerStream(
     TimerGenerator generator,
-    Future stopWhen,
+    Future stopSignal,
   ) async* {
     var now = DateTime.now();
     DateTime next;
@@ -148,13 +171,11 @@ class _TimerBuilderState extends State<TimerBuilder> {
         continue;
       Duration waitTime = next.difference(now);
       try {
-        await stopWhen.timeout(waitTime);
+        await stopSignal.timeout(waitTime);
         return;
-      } catch (ex) {
-        if (!(ex is TimeoutException))
-          throw ex;
+      } on TimeoutException catch (_) {
+        yield next;
       }
-      yield next;
       now = DateTime.now();
     }
   }
