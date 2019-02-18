@@ -41,7 +41,6 @@ class TimerBuilder extends StatefulWidget {
 
   /// Rebuilds on a schedule
   TimerBuilder.scheduled(Iterable<DateTime> schedule, {
-    bool align = true,
     /// Builds the widget. Called for every time event or when the widget needs to be built/rebuilt.
     @required
     this.builder,

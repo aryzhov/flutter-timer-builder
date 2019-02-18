@@ -1,12 +1,13 @@
 # TimerBuilder
 
 A widget that rebuilds itself on scheduled, periodic, or 
-dynamically generated time events. Some cases where this widget can be useful:
+dynamically generated time events. 
 
+Here are some use cases for this widget:
 * When showing time since or until a specified event;
 * When the model updates frequently but you want to limit UI update frequency;
 * When showing current date or time;
-* When the representation of of your UI depends on a certain time event.
+* When the representation a widget on a certain time event.
 
 ![animated image](https://github.com/aryzhov/flutter-timer-builder/blob/master/doc/timer_builder_example.gif?raw=true)     
 
