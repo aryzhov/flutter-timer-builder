@@ -1,3 +1,7 @@
+## [1.2.3] - 02/18/2019
+
+* Updated README
+
 ## [1.2.2] - 02/18/2019
 
 * Updated package documentation
