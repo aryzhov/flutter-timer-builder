@@ -1,3 +1,7 @@
+## [1.2.2] - 02/18/2019
+
+* Updated package documentation
+
 ## [1.2.0] - 02/18/2019
 
 * Changed date alignment rules, supporting alignment by the day
