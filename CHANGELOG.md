@@ -1,3 +1,7 @@
+## [1.3.0] - 04/14/2019
+
+* Moved a number of static methods outside of TimerBuilder to make them reusable
+
 ## [1.2.3] - 02/18/2019
 
 * Updated README
