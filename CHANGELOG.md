@@ -1,3 +1,7 @@
+## [2.0.0] - -3/23/2021
+
+* Null safety
+
 ## [1.3.0] - 04/14/2019
 
 * Moved a number of static methods outside of TimerBuilder to make them reusable
