@@ -1,6 +1,5 @@
 name: timer_builder
 description: A widget that rebuilds itself on scheduled, periodic, or dynamically generated time events.
-author: Alexander Ryzhov <aryzhov07@gmail.com>
 homepage: https://github.com/aryzhov/flutter-timer-builder
 version: 2.0.0
 
