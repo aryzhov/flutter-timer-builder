@@ -32,7 +32,7 @@ class SampleAppState extends State<SampleApp> {
           // This function will be called once the alert time is reached
           var now = DateTime.now();
           var reached = now.compareTo(alert) >= 0;
-          final textStyle = Theme.of(context).textTheme.title;
+          final textStyle = Theme.of(context).textTheme.titleMedium;
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -55,7 +55,7 @@ class SampleAppState extends State<SampleApp> {
                         );
                       })
                     : Text("Alert", style: textStyle),
-                RaisedButton(
+                ElevatedButton(
                   child: Text("Reset"),
                   onPressed: () {
                     setState(() {

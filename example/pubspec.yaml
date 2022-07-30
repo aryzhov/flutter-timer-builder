@@ -1,5 +1,4 @@
 name: example
-author: Alexander Ryzhov <aryzhov07@gmail.com>
 version: 1.0.0+1
 
 environment:
@@ -17,5 +16,4 @@ dev_dependencies:
     path: ../
 
 flutter:
-
   uses-material-design: true
